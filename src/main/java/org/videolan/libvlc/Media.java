@@ -25,6 +25,7 @@ import android.support.annotation.Nullable;
 
 import org.videolan.libvlc.util.AndroidUtil;
 import org.videolan.libvlc.util.HWDecoderUtil;
+import org.videolan.libvlc.util.VLCUtil;
 
 import java.io.FileDescriptor;
 
@@ -207,16 +208,45 @@ public class Media extends VLCObject<Media.Event> {
      * see libvlc_video_track_t
      */
     public static class VideoTrack extends Track {
+        public static final class Orientation {
+            /** Top line represents top, left column left */
+            public static final int TopLeft = 0;
+            /** Flipped horizontally */
+            public static final int TopRight = 1;
+            /** Flipped vertically */
+            public static final int BottomLeft = 2;
+            /** Rotated 180 degrees */
+            public static final int BottomRight = 3;
+            /** Transposed */
+            public static final int LeftTop = 4;
+            /** Rotated 90 degrees clockwise (or 270 anti-clockwise) */
+            public static final int LeftBottom = 5;
+            /** Rotated 90 degrees anti-clockwise */
+            public static final int RightTop= 6;
+            /** Anti-transposed */
+            public static final int RightBottom = 7;
+        }
+
+        public static final class Projection {
+            public static final int Rectangular = 0;
+            /** 360 spherical */
+            public static final int EquiRectangular = 1;
+            public static final int CubemapLayoutStandard = 0x100;
+        }
+
         public final int height;
         public final int width;
         public final int sarNum;
         public final int sarDen;
         public final int frameRateNum;
         public final int frameRateDen;
+        public final int orientation;
+        public final int projection;
 
         private VideoTrack(String codec, String originalCodec, int id, int profile,
                 int level, int bitrate, String language, String description,
-                int height, int width, int sarNum, int sarDen, int frameRateNum, int frameRateDen) {
+                int height, int width, int sarNum, int sarDen, int frameRateNum, int frameRateDen,
+                int orientation, int projection) {
             super(Type.Video, codec, originalCodec, id, profile, level, bitrate, language, description);
             this.height = height;
             this.width = width;
@@ -224,16 +254,19 @@ public class Media extends VLCObject<Media.Event> {
             this.sarDen = sarDen;
             this.frameRateNum = frameRateNum;
             this.frameRateDen = frameRateDen;
+            this.orientation = orientation;
+            this.projection = projection;
         }
     }
 
     @SuppressWarnings("unused") /* Used from JNI */
     private static Track createVideoTrackFromNative(String codec, String originalCodec, int id, int profile,
             int level, int bitrate, String language, String description,
-            int height, int width, int sarNum, int sarDen, int frameRateNum, int frameRateDen) {
+            int height, int width, int sarNum, int sarDen, int frameRateNum, int frameRateDen,
+            int orientation, int projection) {
         return new VideoTrack(codec, originalCodec, id, profile,
                 level, bitrate, language, description,
-                height, width, sarNum, sarDen, frameRateNum, frameRateDen);
+                height, width, sarNum, sarDen, frameRateNum, frameRateDen, orientation, projection);
     }
 
     /**
@@ -303,6 +336,74 @@ public class Media extends VLCObject<Media.Event> {
         return new Slave(type, priority, uri);
     }
 
+    /**
+     * see libvlc_media_stats_t
+     */
+    public static class Stats {
+
+        public final int readBytes;
+        public final float inputBitrate;
+        public final int demuxReadBytes;
+        public final float demuxBitrate;
+        public final int demuxCorrupted;
+        public final int demuxDiscontinuity;
+        public final int decodedVideo;
+        public final int decodedAudio;
+        public final int displayedPictures;
+        public final int lostPictures;
+        public final int playedAbuffers;
+        public final int lostAbuffers;
+        public final int sentPackets;
+        public final int sentBytes;
+        public final float sendBitrate;
+
+        public Stats(int readBytes, float inputBitrate, int demuxReadBytes,
+                     float demuxBitrate, int demuxCorrupted,
+                     int demuxDiscontinuity, int decodedVideo, int decodedAudio,
+                     int displayedPictures, int lostPictures, int playedAbuffers,
+                     int lostAbuffers, int sentPackets, int sentBytes,
+                     float sendBitrate) {
+            this.readBytes = readBytes;
+            this.inputBitrate = inputBitrate;
+            this.demuxReadBytes = demuxReadBytes;
+            this.demuxBitrate = demuxBitrate;
+            this.demuxCorrupted = demuxCorrupted;
+            this.demuxDiscontinuity = demuxDiscontinuity;
+            this.decodedVideo = decodedVideo;
+            this.decodedAudio = decodedAudio;
+            this.displayedPictures = displayedPictures;
+            this.lostPictures = lostPictures;
+            this.playedAbuffers = playedAbuffers;
+            this.lostAbuffers = lostAbuffers;
+            this.sentPackets = sentPackets;
+            this.sentBytes = sentBytes;
+            this.sendBitrate = sendBitrate;
+        }
+    }
+
+    @SuppressWarnings("unused") /* Used from JNI */
+    private static Stats createStatsFromNative(int readBytes,
+                                               float inputBitrate,
+                                               int demuxReadBytes,
+                                               float demuxBitrates,
+                                               int demuxCorrupted,
+                                               int demuxDiscontinuity,
+                                               int decodedVideo,
+                                               int decodedAudio,
+                                               int displayedPictures,
+                                               int lostPictures,
+                                               int playedAbuffers,
+                                               int lostAbuffers,
+                                               int sentPackets,
+                                               int sentBytes,
+                                               float sendBitrate) {
+        return new Stats(readBytes, inputBitrate, demuxReadBytes,
+                         demuxBitrates, demuxCorrupted, demuxDiscontinuity,
+                         decodedVideo, decodedAudio, displayedPictures,
+                         lostPictures, playedAbuffers, lostAbuffers,
+                         sentPackets, sentBytes, sendBitrate);
+    }
+
     private static final int PARSE_STATUS_INIT = 0x00;
     private static final int PARSE_STATUS_PARSING = 0x01;
     private static final int PARSE_STATUS_PARSED = 0x02;
@@ -324,8 +425,9 @@ public class Media extends VLCObject<Media.Event> {
      * @param path an absolute local path
      */
     public Media(LibVLC libVLC, String path) {
+        super(libVLC);
         nativeNewFromPath(libVLC, path);
-        mUri = UriFromMrl(nativeGetMrl());
+        mUri = VLCUtil.UriFromMrl(nativeGetMrl());
     }
 
     /**
@@ -335,7 +437,8 @@ public class Media extends VLCObject<Media.Event> {
      * @param uri a valid RFC 2396 Uri
      */
     public Media(LibVLC libVLC, Uri uri) {
-        nativeNewFromLocation(libVLC, locationFromUri(uri));
+        super(libVLC);
+        nativeNewFromLocation(libVLC, VLCUtil.encodeVLCUri(uri));
         mUri = uri;
     }
 
@@ -346,8 +449,9 @@ public class Media extends VLCObject<Media.Event> {
      * @param fd file descriptor object
      */
     public Media(LibVLC libVLC, FileDescriptor fd) {
+        super(libVLC);
         nativeNewFromFd(libVLC, fd);
-        mUri = UriFromMrl(nativeGetMrl());
+        mUri = VLCUtil.UriFromMrl(nativeGetMrl());
     }
 
     /**
@@ -356,62 +460,13 @@ public class Media extends VLCObject<Media.Event> {
      * @param index index of the Media from the MediaList
      */
     protected Media(MediaList ml, int index) {
+        super(ml);
         if (ml == null || ml.isReleased())
             throw new IllegalArgumentException("MediaList is null or released");
         if (!ml.isLocked())
             throw new IllegalStateException("MediaList should be locked");
         nativeNewFromMediaList(ml, index);
-        mUri = UriFromMrl(nativeGetMrl());
-    }
-
-    private static final String URI_AUTHORIZED_CHARS = "!'()*";
-
-    /**
-     * VLC authorize only "-._~" in Mrl format, android Uri authorize "_-!.~'()*".
-     * Therefore, decode the characters authorized by Android Uri when creating an Uri from VLC.
-     */
-    private static Uri UriFromMrl(String mrl) {
-        final char array[] = mrl.toCharArray();
-        final StringBuilder sb = new StringBuilder(array.length);
-
-        for (int i = 0; i < array.length; ++i) {
-            final char c = array[i];
-            if (c == '%') {
-                if (array.length - i >= 3) {
-                    try {
-                        final int hex = Integer.parseInt(new String(array, i + 1, 2), 16);
-                        if (URI_AUTHORIZED_CHARS.indexOf(hex) != -1) {
-                            sb.append((char) hex);
-                            i += 2;
-                            continue;
-                        }
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-
-            }
-            sb.append(c);
-        }
-
-        return Uri.parse(sb.toString());
-    }
-
-    /**
-     * VLC authorize only "-._~" in Mrl format, android Uri authorize "_-!.~'()*".
-     * Therefore, encode the characters authorized by Android Uri when creating a mrl from an Uri.
-     */
-    protected static String locationFromUri(Uri uri) {
-        final char array[] = uri.toString().toCharArray();
-        final StringBuilder sb = new StringBuilder(array.length * 2);
-
-        for (final char c : array) {
-            if (URI_AUTHORIZED_CHARS.indexOf(c) != -1)
-                sb.append("%").append(Integer.toHexString(c));
-            else
-                sb.append(c);
-        }
-
-        return sb.toString();
+        mUri = VLCUtil.UriFromMrl(nativeGetMrl());
     }
 
     public void setEventListener(EventListener listener) {
@@ -419,7 +474,7 @@ public class Media extends VLCObject<Media.Event> {
     }
 
     @Override
-    protected synchronized Event onEventNative(int eventType, long arg1, float arg2) {
+    protected synchronized Event onEventNative(int eventType, long arg1, long arg2, float argf1) {
         switch (eventType) {
         case Event.MetaChanged:
             // either we update all metas (if first call) or we update a specific meta
@@ -552,7 +607,7 @@ public class Media extends VLCObject<Media.Event> {
      * event (only if this methods returned true).
      *
      * @param flags see {@link Parse}
-     * @param imeout maximum time allowed to preparse the media. If -1, the
+     * @param timeout maximum time allowed to preparse the media. If -1, the
      * default "preparse-timeout" option will be used as a timeout. If 0, it will
      * wait indefinitely. If > 0, the timeout will be used (in milliseconds).
      * @return true in case of success, false otherwise.
@@ -670,7 +725,7 @@ public class Media extends VLCObject<Media.Event> {
 
 
     private static String getMediaCodecModule() {
-        return AndroidUtil.isLolliPopOrLater() ? "mediacodec_ndk" : "mediacodec_jni";
+        return AndroidUtil.isLolliPopOrLater ? "mediacodec_ndk" : "mediacodec_jni";
     }
 
     /**
@@ -680,12 +735,15 @@ public class Media extends VLCObject<Media.Event> {
      * @param force force hw acceleration even for unknown devices
      */
     public void setHWDecoderEnabled(boolean enabled, boolean force) {
-        final HWDecoderUtil.Decoder decoder = enabled ?
+        HWDecoderUtil.Decoder decoder = enabled ?
                 HWDecoderUtil.getDecoderFromDevice() :
                 HWDecoderUtil.Decoder.NONE;
 
-        if (decoder == HWDecoderUtil.Decoder.NONE ||
-                (decoder == HWDecoderUtil.Decoder.UNKNOWN && !force)) {
+        /* Unknown device but the user asked for hardware acceleration */
+        if (decoder == HWDecoderUtil.Decoder.UNKNOWN && force)
+            decoder = HWDecoderUtil.Decoder.ALL;
+
+        if (decoder == HWDecoderUtil.Decoder.NONE || decoder == HWDecoderUtil.Decoder.UNKNOWN) {
             addOption(":codec=all");
             return;
         }
@@ -703,12 +761,10 @@ public class Media extends VLCObject<Media.Event> {
         addOption(":network-caching=1500");
 
         final StringBuilder sb = new StringBuilder(":codec=");
-        if (decoder == HWDecoderUtil.Decoder.MEDIACODEC)
+        if (decoder == HWDecoderUtil.Decoder.MEDIACODEC || decoder == HWDecoderUtil.Decoder.ALL)
             sb.append(getMediaCodecModule()).append(",");
-        else if (decoder == HWDecoderUtil.Decoder.OMX)
+        if (force && (decoder == HWDecoderUtil.Decoder.OMX || decoder == HWDecoderUtil.Decoder.ALL))
             sb.append("iomx,");
-        else
-            sb.append(getMediaCodecModule()).append(",iomx,");
         sb.append("all");
 
         addOption(sb.toString());
@@ -773,6 +829,14 @@ public class Media extends VLCObject<Media.Event> {
         return nativeGetSlaves();
     }
 
+    /**
+     * Get the stats related to the playing media
+     */
+    @Nullable
+    public Stats getStats() {
+        return nativeGetStats();
+    }
+
     @Override
     protected void onReleaseNative() {
         if (mSubItems != null)
@@ -798,4 +862,5 @@ public class Media extends VLCObject<Media.Event> {
     private native void nativeAddSlave(int type, int priority, String uri);
     private native void nativeClearSlaves();
     private native Slave[] nativeGetSlaves();
+    private native Stats nativeGetStats();
 }

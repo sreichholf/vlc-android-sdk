@@ -25,6 +25,7 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.net.Uri;
 import android.os.Build;
+import android.support.annotation.NonNull;
 import android.util.Log;
 
 import org.videolan.libvlc.LibVLC;
@@ -59,13 +60,10 @@ public class VLCUtil {
     }
 
     @SuppressWarnings("deprecation")
-    @TargetApi(Build.VERSION_CODES.FROYO)
     public static String[] getABIList() {
-        final boolean hasABI2 = Build.VERSION.SDK_INT >= Build.VERSION_CODES.FROYO;
-        final String[] abis = new String[hasABI2 ? 2 : 1];
+        final String[] abis = new String[2];
         abis[0] = android.os.Build.CPU_ABI;
-        if (hasABI2)
-            abis[1] = android.os.Build.CPU_ABI2;
+        abis[1] = android.os.Build.CPU_ABI2;
         return abis;
     }
 
@@ -321,10 +319,7 @@ public class VLCUtil {
             libraryPaths = property.split(":");
         } else {
             libraryPaths = new String[1];
-            if (AndroidUtil.isGingerbreadOrLater())
-                libraryPaths[0] = applicationInfo.nativeLibraryDir;
-            else
-                libraryPaths[0] = applicationInfo.dataDir + "/lib";
+            libraryPaths[0] = applicationInfo.nativeLibraryDir;
         }
         if (libraryPaths[0] == null) {
             Log.e(TAG, "can't find library path");
@@ -521,6 +516,58 @@ public class VLCUtil {
         } while ((c & 0x80) > 0);
 
         return ret;
+    }
+
+    private static final String URI_AUTHORIZED_CHARS = "!'()*";
+
+    /**
+     * VLC authorize only "-._~" in Mrl format, android Uri authorize "_-!.~'()*".
+     * Therefore, decode the characters authorized by Android Uri when creating an Uri from VLC.
+     */
+    public static Uri UriFromMrl(String mrl) {
+        final char array[] = mrl.toCharArray();
+        final StringBuilder sb = new StringBuilder(array.length*2);
+        for (int i = 0; i < array.length; ++i) {
+            final char c = array[i];
+            if (c == '%') {
+                if (array.length - i >= 3) {
+                    try {
+                        final int hex = Integer.parseInt(new String(array, i + 1, 2), 16);
+                        if (URI_AUTHORIZED_CHARS.indexOf(hex) != -1) {
+                            sb.append((char) hex);
+                            i += 2;
+                            continue;
+                        }
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+            sb.append(c);
+        }
+
+        return Uri.parse(sb.toString());
+    }
+
+    public static String encodeVLCUri(@NonNull Uri uri) {
+        return encodeVLCString(uri.toString());
+    }
+
+    /**
+     * VLC only acccepts "-._~" in Mrl format, android Uri accepts "_-!.~'()*".
+     * Therefore, encode the characters authorized by Android Uri when creating a mrl from an Uri.
+     */
+    public static String encodeVLCString(@NonNull String mrl) {
+        final char[] array = mrl.toCharArray();
+        final StringBuilder sb = new StringBuilder(array.length * 2);
+
+        for (final char c : array) {
+            if (URI_AUTHORIZED_CHARS.indexOf(c) != -1)
+                sb.append("%").append(Integer.toHexString(c));
+            else
+                sb.append(c);
+        }
+
+        return sb.toString();
     }
 
     /**

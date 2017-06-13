@@ -76,6 +76,7 @@ public class MediaDiscoverer extends VLCObject<MediaDiscoverer.Event> {
      * @param name Name of the vlc service discovery ("dsm", "upnp", "bonjour"...).
      */
     public MediaDiscoverer(LibVLC libVLC, String name) {
+        super(libVLC);
         nativeNew(libVLC, name);
     }
 
@@ -105,7 +106,7 @@ public class MediaDiscoverer extends VLCObject<MediaDiscoverer.Event> {
     }
 
     @Override
-    protected Event onEventNative(int eventType, long arg1, float arg2) {
+    protected Event onEventNative(int eventType, long arg1, long arg2, float argf1) {
         switch (eventType) {
             case Event.Started:
             case Event.Ended:

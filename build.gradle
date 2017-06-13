@@ -1,22 +1,22 @@
 buildscript {
     repositories {
-        mavenCentral()
+        jcenter()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:1.3.1'
-        classpath 'org.ajoberstar:gradle-git:1.3.2'
+        classpath 'com.android.tools.build:gradle:2.3.3'
+        classpath 'org.ajoberstar:gradle-git:1.7.2'
     }
 }
 apply plugin: 'com.android.library'
 android {
-    compileSdkVersion 23
-    buildToolsVersion '23.0.2'
+    compileSdkVersion 26
+    buildToolsVersion '26.0.0'
 
     defaultConfig {
         minSdkVersion 9
-        targetSdkVersion 23
-        versionCode 1
-        versionName "1.0"
+        targetSdkVersion 25
+        versionName = '2.1.11'
+        versionCode = 2011100
     }
     buildTypes {
         release {
@@ -31,8 +31,8 @@ android {
 }
 
 dependencies {
-    compile "com.android.support:support-v4:23.1.1"
-    compile 'com.android.support:support-annotations:23.1.1'
+    compile "com.android.support:support-v4:25.2.0"
+    compile 'com.android.support:support-annotations:25.2.0'
 }
 
 allprojects {
@@ -40,7 +40,7 @@ allprojects {
     group = GROUP
 
     repositories {
-        mavenCentral()
+        jcenter()
     }
 }
 
@@ -72,29 +72,23 @@ task updateVlcCheckout(dependsOn: 'cloneVlcAndroid') << {
 // This is the case when we're building for the first time.
 updateVlcCheckout.onlyIf { project.ext.vlcSource.exists() }
 
-task purgeOldJniLibs(type: Delete, dependsOn: 'updateVlcCheckout') {
-    delete "src/main/jniLibs"
+
+task purgeOld(type: Delete) {
+    delete "src/main/java", "src/main/jniLibs"
 }
 
-task purgeOldJava(type: Delete, dependsOn: 'purgeOldJniLibs') {
-    delete "src/main/java"
+def purgeLibVlcBuild() {
+    delete vlcAndroidSource.getAbsolutePath() + '/libvlc/build', vlcAndroidSource.getAbsolutePath() + '/build'
 }
 
-task compileVlcArmv6(type: Exec, dependsOn: 'purgeOldJava') {
-    workingDir project.ext.vlcAndroidSource
-    commandLine './compile.sh'
-    args "-a", "armeabi"
-    args "release" // Remove this to build a debug libvlc
-    args "-l" // only build libvlc
+def build(arch) {
+
 }
 
-task buildVlcArmv6(type: Copy, dependsOn: 'compileVlcArmv6') {
-    from(vlcAndroidSource.getAbsolutePath() + '/libvlc/jni/libs/armeabi/')
-    into('src/main/jniLibs/armeabi/')
-    finalizedBy 'copyLibVlcFiles'
-}
-
-task compileVlcArmv7a(type: Exec, dependsOn: 'purgeOldJava') {
+task compileVlcArmv7a(type: Exec, dependsOn: 'purgeOld') {
+    doFirst  {
+        purgeLibVlcBuild()
+    }
     workingDir project.ext.vlcAndroidSource
     commandLine './compile.sh'
     args "-a", "armeabi-v7a"
@@ -108,7 +102,10 @@ task buildVlcArmv7a(type: Copy, dependsOn: 'compileVlcArmv7a') {
     finalizedBy 'copyLibVlcFiles'
 }
 
-task compileVlcArmv8a(type: Exec, dependsOn: 'purgeOldJava') {
+task compileVlcArmv8a(type: Exec, dependsOn: 'purgeOld') {
+    doFirst  {
+        purgeLibVlcBuild()
+    }
     workingDir project.ext.vlcAndroidSource
     commandLine './compile.sh'
     args "-a", "arm64-v8a"
@@ -122,22 +119,27 @@ task buildVlcArmv8a(type: Copy, dependsOn: 'compileVlcArmv8a') {
     finalizedBy 'copyLibVlcFiles'
 }
 
+//task compileVlcMips(type: Exec, dependsOn: 'purgeOld') {
+//    doFirst  {
+//        purgeLibVlcBuild()
+//    }
+//    workingDir project.ext.vlcAndroidSource
+//    commandLine './compile.sh'
+//    args "-a", "mips"
+//    args "release" // Remove this to build a debug libvlc
+//    args "-l" // only build libvlc
+//}
 
-task compileVlcMips(type: Exec, dependsOn: 'purgeOldJava') {
-    workingDir project.ext.vlcAndroidSource
-    commandLine './compile.sh'
-    args "-a", "mips"
-    args "release" // Remove this to build a debug libvlc
-    args "-l" // only build libvlc
-}
+//task buildVlcMips(type: Copy, dependsOn: 'compileVlcMips') {
+//    from(vlcAndroidSource.getAbsolutePath() + '/libvlc/jni/libs/mips64/')
+//    into('src/main/jniLibs/mips/')
+//    finalizedBy 'copyLibVlcFiles'
+//}
 
-task buildVlcMips(type: Copy, dependsOn: 'compileVlcMips') {
-    from(vlcAndroidSource.getAbsolutePath() + '/libvlc/jni/libs/mips/')
-    into('src/main/jniLibs/mips/')
-    finalizedBy 'copyLibVlcFiles'
-}
-
-task compileVlcX86(type: Exec, dependsOn: 'purgeOldJava') {
+task compileVlcX86(type: Exec, dependsOn: 'purgeOld') {
+    doFirst  {
+        purgeLibVlcBuild()
+    }
     workingDir project.ext.vlcAndroidSource
     commandLine './compile.sh'
     args "-a", "x86"
@@ -152,7 +154,10 @@ task buildVlcX86(type: Copy, dependsOn: 'compileVlcX86') {
 }
 
 
-task compileVlcX8664(type: Exec, dependsOn: 'purgeOldJava') {
+task compileVlcX8664(type: Exec, dependsOn: 'purgeOld') {
+    doFirst  {
+        purgeLibVlcBuild()
+    }
     workingDir project.ext.vlcAndroidSource
     commandLine './compile.sh'
     args "-a", "x86_64"

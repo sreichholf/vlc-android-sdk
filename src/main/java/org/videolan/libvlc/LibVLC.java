@@ -24,6 +24,7 @@ import android.content.Context;
 import android.os.Build;
 import android.util.Log;
 
+import org.videolan.libvlc.util.AndroidUtil;
 import org.videolan.libvlc.util.HWDecoderUtil;
 
 import java.util.ArrayList;
@@ -31,6 +32,7 @@ import java.util.ArrayList;
 @SuppressWarnings("unused, JniMissingFunction")
 public class LibVLC extends VLCObject<LibVLC.Event> {
     private static final String TAG = "VLC/LibVLC";
+    final Context mAppContext;
 
     public static class Event extends VLCEvent {
         protected Event(int type) {
@@ -38,34 +40,30 @@ public class LibVLC extends VLCObject<LibVLC.Event> {
         }
     }
 
-    /** Native crash handler */
-    private static OnNativeCrashListener sOnNativeCrashListener;
-
     /**
      * Create a LibVLC withs options
      *
      * @param options
      */
     public LibVLC(Context context, ArrayList<String> options) {
+        mAppContext = context.getApplicationContext();
         loadLibraries();
 
+        if (options == null)
+            options = new ArrayList<String>();
         boolean setAout = true, setChroma = true;
         // check if aout/vout options are already set
-        if (options != null) {
-            for (String option : options) {
-                if (option.startsWith("--aout="))
-                    setAout = false;
-                if (option.startsWith("--androidwindow-chroma"))
-                    setChroma = false;
-                if (!setAout && !setChroma)
-                    break;
-            }
+        for (String option : options) {
+            if (option.startsWith("--aout="))
+                setAout = false;
+            if (option.startsWith("--android-display-chroma"))
+                setChroma = false;
+            if (!setAout && !setChroma)
+                break;
         }
 
         // set aout/vout options if they are not set
         if (setAout || setChroma) {
-            if (options == null)
-                options = new ArrayList<String>();
             if (setAout) {
                 final HWDecoderUtil.AudioOutput hwAout = HWDecoderUtil.getAudioOutputFromDevice();
                 if (hwAout == HWDecoderUtil.AudioOutput.OPENSLES)
@@ -74,9 +72,22 @@ public class LibVLC extends VLCObject<LibVLC.Event> {
                     options.add("--aout=android_audiotrack");
             }
             if (setChroma) {
-                options.add("--androidwindow-chroma");
-                options.add("RV32");
+                options.add("--android-display-chroma");
+                options.add("RV16");
             }
+        }
+
+        /* XXX: HACK to remove when we drop 2.3 support: force android_display vout */
+        if (!AndroidUtil.isHoneycombOrLater) {
+            boolean setVout = true;
+            for (String option : options) {
+                if (option.startsWith("--vout")) {
+                    setVout = false;
+                    break;
+                }
+            }
+            if (setVout)
+                options.add("--vout=android_display,none");
         }
 
         nativeNew(options.toArray(new String[options.size()]), context.getDir("vlc", Context.MODE_PRIVATE).getAbsolutePath());
@@ -108,26 +119,13 @@ public class LibVLC extends VLCObject<LibVLC.Event> {
     public native String changeset();
 
     @Override
-    protected Event onEventNative(int eventType, long arg1, float arg2) {
+    protected Event onEventNative(int eventType, long arg1, long arg2, float argf1) {
         return null;
     }
 
     @Override
     protected void onReleaseNative() {
         nativeRelease();
-    }
-
-    public interface OnNativeCrashListener {
-        void onNativeCrash();
-    }
-
-    public static void setOnNativeCrashListener(OnNativeCrashListener l) {
-        sOnNativeCrashListener = l;
-    }
-
-    private static void onNativeCrash() {
-        if (sOnNativeCrashListener != null)
-            sOnNativeCrashListener.onNativeCrash();
     }
 
     /**
@@ -153,7 +151,9 @@ public class LibVLC extends VLCObject<LibVLC.Event> {
             return;
         sLoaded = true;
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.GINGERBREAD_MR1) {
+        System.loadLibrary("c++_shared");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.GINGERBREAD_MR1
+                && Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             try {
                 if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.HONEYCOMB_MR1)
                     System.loadLibrary("anw.10");
@@ -186,10 +186,6 @@ public class LibVLC extends VLCObject<LibVLC.Event> {
                     Log.w(TAG, "Unable to load the iomx library: " + t);
             }
         }
-
-        try {
-            System.loadLibrary("compat.7");
-        } catch (Throwable ignored) {}
 
         try {
             System.loadLibrary("vlc");

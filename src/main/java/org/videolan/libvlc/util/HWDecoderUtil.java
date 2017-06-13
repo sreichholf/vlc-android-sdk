@@ -28,8 +28,6 @@ import java.util.HashMap;
  */
 public class HWDecoderUtil {
 
-    public static final boolean HAS_SUBTITLES_SURFACE = AndroidUtil.isGingerbreadOrLater();
-
     public enum Decoder {
         UNKNOWN, NONE, OMX, MEDIACODEC, ALL
     }
@@ -143,9 +141,9 @@ public class HWDecoderUtil {
          * Try OMX or MediaCodec after HoneyComb depending on device properties.
          * Otherwise, use software decoder by default.
          */
-        if (AndroidUtil.isJellyBeanMR2OrLater())
+        if (AndroidUtil.isJellyBeanMR2OrLater)
             return Decoder.ALL;
-        else if (AndroidUtil.isHoneycombOrLater()) {
+        else if (AndroidUtil.isHoneycombOrLater) {
             for (DecoderBySOC decBySOC : sDecoderBySOCList) {
                 final String prop = getSystemPropertyCached(decBySOC.key);
                 if (prop != null) {
@@ -162,18 +160,14 @@ public class HWDecoderUtil {
      * (By default, returns ALL, i.e AudioTrack + OpenSles)
      */
     public static AudioOutput getAudioOutputFromDevice() {
-        if (!AndroidUtil.isGingerbreadOrLater()) {
-            return AudioOutput.AUDIOTRACK;
-        } else {
-            for (AudioOutputBySOC aoutBySOC : sAudioOutputBySOCList) {
-                final String prop = getSystemPropertyCached(aoutBySOC.key);
-                if (prop != null) {
-                    if (prop.contains(aoutBySOC.value))
-                        return aoutBySOC.aout;
-                }
+        for (AudioOutputBySOC aoutBySOC : sAudioOutputBySOCList) {
+            final String prop = getSystemPropertyCached(aoutBySOC.key);
+            if (prop != null) {
+                if (prop.contains(aoutBySOC.value))
+                    return aoutBySOC.aout;
             }
-            return AudioOutput.ALL;
         }
+        return AudioOutput.ALL;
     }
 
     private static String getSystemPropertyCached(String key) {
